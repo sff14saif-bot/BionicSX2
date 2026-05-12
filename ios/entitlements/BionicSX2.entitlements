@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- REQUIRED: JIT execution on iOS 14.2+ -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- REQUIRED: unsigned executable memory (VIXL code cache) -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Standard iOS sandbox -->
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array/>
+
+    <!-- Game controller support (MFi / Xbox / PlayStation) -->
+    <key>com.apple.developer.game-controllers</key>
+    <true/>
+
+    <!-- Network access for future features -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

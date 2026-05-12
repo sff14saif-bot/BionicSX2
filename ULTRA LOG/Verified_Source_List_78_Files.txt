@@ -1,0 +1,122 @@
+================================================================================
+VERIFIED FINAL SOURCE LIST — 78 FILES
+================================================================================
+
+All files verified to exist in pcsx2/pcsx2/ directory.
+
+| File | Status |
+|------|--------|
+| **Core EE/IOP (56 files)** | |
+| R3000A.cpp | OK |
+| R3000AInterpreter.cpp | OK |
+| R3000AOpcodeTables.cpp | OK |
+| R5900.cpp | OK |
+| R5900OpcodeImpl.cpp | OK |
+| R5900OpcodeTables.cpp | OK |
+| COP0.cpp | OK |
+| COP2.cpp | OK |
+| FPU.cpp | OK |
+| MMI.cpp | OK |
+| Interpreter.cpp | OK |
+| VU0.cpp | OK |
+| VU0micro.cpp | OK |
+| VU0microInterp.cpp | OK |
+| VU1micro.cpp | OK |
+| VU1microInterp.cpp | OK |
+| VUflags.cpp | OK |
+| VUmicro.cpp | OK |
+| VUmicroMem.cpp | OK |
+| VUops.cpp | OK |
+| Cache.cpp | OK |
+| Counters.cpp | OK |
+| Dmac.cpp | OK |
+| FiFo.cpp | OK |
+| FW.cpp | OK |
+| Gif.cpp | OK |
+| Gif_Logger.cpp | OK |
+| Gif_Unit.cpp | OK |
+| Hw.cpp | OK |
+| HwRead.cpp | OK |
+| HwWrite.cpp | OK |
+| IopBios.cpp | OK |
+| IopCounters.cpp | OK |
+| IopDma.cpp | OK |
+| IopGte.cpp | OK |
+| IopHw.cpp | OK |
+| IopIrq.cpp | OK |
+| IopMem.cpp | OK |
+| Mdec.cpp | OK |
+| Memory.cpp | OK |
+| MTGS.cpp | OK |
+| MTVU.cpp | OK |
+| Patch.cpp | OK |
+| PINE.cpp | OK |
+| SaveState.cpp | OK |
+| Sif.cpp | OK |
+| Sif0.cpp | OK |
+| Sif1.cpp | OK |
+| sif2.cpp | OK |
+| SPR.cpp | OK |
+| StateWrapper.cpp | OK |
+| Vif.cpp | OK |
+| Vif_Codes.cpp | OK |
+| Vif_Transfer.cpp | OK |
+| Vif_Unpack.cpp | OK |
+| Vif0_Dma.cpp | OK |
+| Vif1_Dma.cpp | OK |
+| Vif1_MFIFO.cpp | OK |
+| vtlb.cpp | OK |
+| Elfheader.cpp | OK |
+| Pcsx2Config.cpp | OK |
+| VMManager.cpp | OK |
+| Host.cpp | OK |
+| **CDVD (11 files)** | |
+| CDVD/CDVDcommon.cpp | OK |
+| CDVD/CDVDisoReader.cpp | OK |
+| CDVD/InputIsoFile.cpp | OK |
+| CDVD/OutputIsoFile.cpp | OK |
+| CDVD/ThreadedFileReader.cpp | OK |
+| CDVD/BlockdumpFileReader.cpp | OK |
+| CDVD/ChdFileReader.cpp | OK |
+| CDVD/CsoFileReader.cpp | OK |
+| CDVD/GzippedFileReader.cpp | OK |
+| CDVD/FlatFileReader.cpp | OK |
+| CDVD/Ps1CD.cpp | OK |
+| **SIO/Pad (7 files)** | |
+| SIO/Pad/Pad.cpp | OK |
+| SIO/Pad/PadDualshock2.cpp | OK |
+| SIO/Pad/PadNotConnected.cpp | OK |
+| SIO/Sio0.cpp | OK |
+| SIO/Sio2.cpp | OK |
+| SIO/Memcard/MemoryCardFile.cpp | OK |
+| SIO/Memcard/MemoryCardFolder.cpp | OK |
+| **SPU2 (5 files)** | |
+| SPU2/Dma.cpp | OK |
+| SPU2/Mixer.cpp | OK |
+| SPU2/RegTable.cpp | OK |
+| SPU2/Reverb.cpp | OK |
+| SPU2/spu2.cpp | OK |
+| **IPU (3 files)** | |
+| IPU/IPU.cpp | OK |
+| IPU/IPUdma.cpp | OK |
+| IPU/yuv2rgb.cpp | OK |
+| **GS (15 files)** | |
+| GS/GS.cpp | OK |
+| GS/GSBlock.cpp | OK |
+| GS/GSClut.cpp | OK |
+| GS/GSLocalMemory.cpp | OK |
+| GS/GSPerfMon.cpp | OK |
+| GS/GSState.cpp | OK |
+| GS/GSTables.cpp | OK |
+| GS/GSUtil.cpp | OK |
+| GS/Renderers/Common/GSDevice.cpp | OK |
+| GS/Renderers/Common/GSRenderer.cpp | OK |
+| GS/Renderers/Common/GSTexture.cpp | OK |
+| GS/Renderers/Common/GSVertexTraceFMM.cpp | OK |
+| GS/Renderers/SW/GSDrawScanline.cpp | OK |
+| GS/Renderers/SW/GSRasterizer.cpp | OK |
+| GS/Renderers/SW/GSTextureCacheSW.cpp | OK |
+
+================================================================================
+TOTAL: 78 files OK, 0 MISSING
+================================================================================

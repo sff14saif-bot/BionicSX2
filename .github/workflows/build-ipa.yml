@@ -1,0 +1,160 @@
+name: BionicSX2 — Build IPA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-14  # Apple Silicon runner — arm64 native
+
+    steps:
+      # ─── 1. Checkout ───────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # ─── 2. Verify submodules ────────────────────────────────────
+      - name: Verify and init submodules
+        run: |
+          git submodule status
+          echo "--- Checking critical 3rdparty deps ---"
+          for dep in fmt fast_float cpuinfo ryml libjpeg-turbo libpng libwebp; do
+            if [ -d "pcsx2/3rdparty/$dep" ] || [ -d "3rdparty/$dep" ]; then
+              echo "OK: $dep"
+            else
+              echo "MISSING: $dep — build will fail"
+              exit 1
+            fi
+          done
+          echo "--- Init nested submodules inside pcsx2 ---"
+          cd pcsx2 && git submodule update --init --recursive && cd ..
+          echo "--- Init BionicSX2 3rdparty submodules ---"
+          git submodule update --init 3rdparty/libjpeg-turbo \
+                                3rdparty/libpng \
+                                3rdparty/libwebp
+
+      # ─── 3. Xcode version ──────────────────────────────────────────
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      # ─── 4. Build Tools ────────────────────────────────────────────────
+      - name: Install build tools
+        run: |
+          brew install cmake ninja pkg-config nasm
+
+      # ─── 5. Patch libjpeg-turbo for add_subdirectory ───────────────
+      # libjpeg-turbo refuses add_subdirectory() unless CMAKE_SOURCE_DIR matches.
+      # Patch the guard so we can build it as part of BionicSX2's CMake.
+      - name: Patch libjpeg-turbo CMake guard
+        run: |
+          # Replace the FATAL_ERROR guard with a comment so add_subdirectory() works
+          sed -i '' 's/if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)/if(FALSE)/' \
+            3rdparty/libjpeg-turbo/CMakeLists.txt
+          echo "Patched libjpeg-turbo CMakeLists.txt"
+          grep "if(FALSE)" 3rdparty/libjpeg-turbo/CMakeLists.txt
+
+      # ─── 5b. Setup libpng includes ──────────────────────────────────────────
+      - name: Setup libpng include files
+        run: |
+          # libpng requires pnglibconf.h - copy from prebuilt if not generated
+          if [ ! -f 3rdparty/libpng/pnglibconf.h ]; then
+            cp 3rdparty/libpng/pnglibconf.h.prebuilt 3rdparty/libpng/pnglibconf.h
+            echo "Copied pnglibconf.h.prebuilt → pnglibconf.h"
+          fi
+
+      # ─── 5. Patch c4core fast_float for iOS ─────────────────────────
+      # Must run AFTER submodule init so the file exists with correct content
+      - name: Patch c4core fast_float for iOS
+        run: |
+          # c4core fast_float_all.h uses _M_ARM64 to include <intrin.h>,
+          # but intrin.h is Windows-only and doesn't exist on iOS SDK.
+          # Add __APPLE__ exclusion to prevent this on Apple cross-compile.
+          sed -i '' 's/defined(_M_ARM64) \&\& !defined(__MINGW32__)/defined(_M_ARM64) \&\& !defined(__MINGW32__) \&\& !defined(__APPLE__)/' \
+            pcsx2/3rdparty/ryml/ext/c4core/src/c4/ext/fast_float_all.h
+          echo "Patched fast_float_all.h intrin.h guard"
+          grep "defined(_M_ARM64)" pcsx2/3rdparty/ryml/ext/c4core/src/c4/ext/fast_float_all.h | head -5
+
+      # ─── 6. Clean build directory ────────────────────────────────────────
+      - name: Clean build directory
+        run: |
+          rm -rf build
+          echo "Build directory cleaned"
+
+      # ─── 7. Configure ──────────────────────────────────────────────
+      - name: Configure CMake for iOS
+        run: |
+          cmake -B build \
+            -G Xcode \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake \
+            -DPCSX2_TARGET_IOS=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISABLE_PCSX2_RECOMPILER=ON \
+            -DDISABLE_VULKAN=ON \
+            -DDISABLE_ANDROID=ON \
+            -D_M_ARM64=ON
+
+      # ─── 8. Build ──────────────────────────────────────────────────
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # ─── 9. List Xcode schemes ──────────────────────────────────────
+      - name: List Xcode schemes
+        run: |
+          xcodebuild \
+            -project build/BionicSX2.xcodeproj \
+            -list 2>&1
+
+      # ─── 10. Archive (unsigned IPA) ─────────────────────────────────
+      - name: Archive IPA
+        run: |
+          xcodebuild archive \
+            -project build/BionicSX2.xcodeproj \
+            -scheme BionicSX2 \
+            -sdk iphoneos \
+            -archivePath build/BionicSX2.xcarchive \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      # ─── 11. Inspect xcarchive structure ──────────────────────────
+      - name: Inspect xcarchive structure
+        run: find build/BionicSX2.xcarchive -type d | head -20
+
+      # ─── 12. Export unsigned IPA ───────────────────────────────────
+      - name: Export IPA
+        run: |
+          # .app is in build/Release-iphoneos/ (not inside xcarchive for unsigned builds)
+          APP_PATH="build/Release-iphoneos/BionicSX2.app"
+          echo "Using .app at: $APP_PATH"
+
+          if [ -d "$APP_PATH" ]; then
+            mkdir -p build/ipa/Payload
+            cp -r "$APP_PATH" build/ipa/Payload/
+            cd build/ipa
+            zip -r BionicSX2.ipa Payload/
+            echo "IPA created successfully"
+            ls -lh BionicSX2.ipa
+          else
+            echo "ERROR: .app not found at $APP_PATH"
+            ls build/
+            exit 1
+          fi
+
+      # ─── 13. Upload artifact ──────────────────────────────────────
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BionicSX2-unsigned
+          path: build/ipa/BionicSX2.ipa
+          retention-days: 30

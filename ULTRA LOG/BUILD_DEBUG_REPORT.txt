@@ -1,0 +1,178 @@
+================================================================================
+BIONICSX2 iOS BUILD DEBUGGING — COMPREHENSIVE REPORT
+================================================================================
+Date: 2026-05-09
+Status: PARTIAL PROGRESS — ryml/intrin issues fixed, new error in HostSys_iOS.cpp
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1: WHAT WAS DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+8 consecutive GitHub Actions builds were executed, each revealing the next
+layer of dependency and configuration issues. Each fix uncovered the next problem.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2: BUILD HISTORY (8 RUNS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run 25605756671 — Exit 65
+  Error: 'ryml.hpp' file not found (YAML.h:8)
+  Cause: ryml submodule present but CMAKE_PREFIX_PATH=/opt/homebrew was
+         prepending Homebrew paths before ryml source paths.
+
+Run 25605954868 — Exit 65
+  Error: Same — CMAKE_PREFIX_PATH still broke include search.
+  Fix Attempted: Replaced CMAKE_PREFIX_PATH with CMAKE_INCLUDE_PATH.
+  Result: Still broken. CMAKE_INCLUDE_PATH doesn't translate to -I flags in Xcode.
+
+Run 25606068198 — Exit 65
+  Error: Same — CMake cache doesn't translate CMAKE_INCLUDE_PATH to -I flags.
+  Fix Attempted: Added CMAKE_INCLUDE_PATH to ios.toolchain.cmake.
+  Result: Still broken. Xcode generator ignores CMAKE_INCLUDE_PATH.
+
+Run 25606126177 — Exit 65
+  Error: Same — Xcode doesn't read CMAKE_INCLUDE_PATH.
+  Fix Attempted: Added ryml/src to common CMakeLists.txt target_include_directories.
+  Result: Still broken. pcsx2/common/CMakeLists.txt is NOT used by BionicSX2's
+          top-level CMakeLists.txt. BionicSX2 defines its own pcsx2_common target.
+
+Run 25606176847 — Exit 65
+  Error: Same — target_include_directories fix applied to wrong CMakeLists.txt.
+  Fix Attempted: Absolute CMAKE_SOURCE_DIR paths in pcsx2/common/CMakeLists.txt.
+  Result: Still broken. Same reason.
+
+Run 25606227808 — Exit 65
+  Error: Same — fix in wrong file.
+  Fix Attempted: Absolute paths in pcsx2/common/CMakeLists.txt.
+  Result: Still broken. Same reason.
+
+Run 25606322997 — Exit 65
+  Error: Same.
+  Fix Attempted: Added ryml target link + ryml/src include to BionicSX2's
+                 top-level CMakeLists.txt. Also linked ryml target.
+  Result: ryml.hpp now FOUND (major progress), BUT new error:
+          'intrin.h' file not found in c4core fast_float.
+
+Run 25606461609 — Exit 65
+  Error: 'intrin.h' file not found (c4core fast_float).
+  Fix Attempted: Set C4CORE_WITH_FASTFLOAT=OFF.
+  Result: Still broken. ryml/CMakeLists.txt uses OVERRIDE which re-enables
+          C4CORE_WITH_FASTFLOAT regardless of parent setting.
+
+Run 25606585969 — Exit 65
+  Error: Same intrin.h error.
+  Fix Attempted: Same C4CORE_WITH_FASTFLOAT=OFF (didn't work).
+  Root cause: ryml OVERRIDE pattern forces the option ON.
+
+Run 25606718560 — Exit 65
+  Error: 'pthread_jit_write_protect_np' is unavailable (HostSys_iOS.cpp)
+  Fix Applied: sed patch to c4core fast_float_all.h adding __APPLE__ guard
+               on _M_ARM64 intrin.h check.
+  Result: ryml and intrin.h errors CLEARED! Build progressed further.
+          NEW ERROR: pthread_jit_write_protect_np is iOS SDK unavailable.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3: ROOT CAUSE ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[3.1] ryml.hpp NOT FOUND — RESOLVED
+────────────────────────────────────
+- Root cause: BionicSX2 has its own top-level CMakeLists.txt that defines
+  pcsx2_common directly, bypassing pcsx2/common/CMakeLists.txt.
+- Fix: Added ryml/src to target_include_directories(pcsx2_common PUBLIC ...)
+  in BionicSX2/CMakeLists.txt.
+- Also: Linked the 'ryml' target explicitly.
+
+[3.2] intrin.h NOT FOUND — RESOLVED
+────────────────────────────────────
+- Root cause: c4core's fast_float_all.h line 221-223 has:
+    #if ((defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)) || \
+        (defined(_M_ARM64) && !defined(__MINGW32__))
+    #include <intrin.h>
+  The _M_ARM64 condition is TRUE on iOS cross-compile (from -D_M_ARM64=1),
+  but <intrin.h> is Windows-only and doesn't exist in iOS SDK.
+  __clang__ is also defined, so the first part of the OR is FALSE,
+  but _M_ARM64 && !__MINGW32__ is TRUE, triggering the include.
+- This is a c4core bug: _M_ARM64 alone doesn't mean Windows. Should include
+  __APPLE__ in the exclusion.
+- The CMAKE_CROSSCOMPILING variable is NOT set by the ios.toolchain.cmake,
+  so c4core can't detect cross-compile via that path.
+- Fix: sed patch in workflow after submodule init:
+    sed -i '' 's/defined(_M_ARM64) && !defined(__MINGW32__)/defined(_M_ARM64) \&\& !defined(__MINGW32__) \&\& !defined(__APPLE__)/' \
+      pcsx2/3rdparty/ryml/ext/c4core/src/c4/ext/fast_float_all.h
+
+[3.3] pthread_jit_write_protect_np UNAVAILABLE — NEW ERROR, UNRESOLVED
+──────────────────────────────────────────────────────────────────────
+- Location: ios/platform/HostSys_iOS.cpp:29 and :31
+- Error: 'pthread_jit_write_protect_np' is unavailable: not available on iOS
+- This function is available on macOS but NOT on iOS.
+- The code uses it for JIT page protection (W^X memory).
+- Fix needed: Replace with iOS-compatible alternative or stub.
+- Note: pthread_jit_write_protect_np() requires iOS 14.2+ but is also
+  a macOS-only API. The iOS equivalent is different.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4: CURRENT ERROR (Run 25606718560)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ios/platform/HostSys_iOS.cpp:29:9: error: 'pthread_jit_write_protect_np'
+    is unavailable: not available on iOS
+  ios/platform/HostSys_iOS.cpp:31:9: error: 'pthread_jit_write_protect_np'
+    is unavailable: not available on iOS
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5: FIXES APPLIED (all committed to main)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. .github/workflows/build-ipa.yml — Install Homebrew deps
+   - Added: brew install cmake ninja jpeg-turbo libpng webp pkg-config
+
+2. .github/workflows/build-ipa.yml — Init nested submodules
+   - Added: cd pcsx2 && git submodule update --init --recursive
+
+3. cmake/ios.toolchain.cmake — CMAKE_INCLUDE_PATH for ryml
+   - Added: set(CMAKE_INCLUDE_PATH "${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/ryml/src")
+
+4. CMakeLists.txt — ryml include path for pcsx2_common
+   - Added: ${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/ryml/src to target_include_directories
+   - Added: ryml target to target_link_libraries
+
+5. .github/workflows/build-ipa.yml — sed patch for c4core fast_float
+   - Added step: Patch c4core fast_float for iOS
+   - Patches: defined(_M_ARM64) && !defined(__MINGW32__)
+              → defined(_M_ARM64) && !defined(__MINGW32__) && !defined(__APPLE__)
+
+6. CMakeLists.txt — C4CORE_WITH_FASTFLOAT=OFF
+   - Set but does NOT work due to ryml OVERRIDE mechanism
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6: NEXT STEPS (in priority order)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIORITY 1 — Fix pthread_jit_write_protect_np (CURRENT BLOCKER)
+─────────────────────────────────────────────────────────────
+HostSys_iOS.cpp needs to be fixed. Options:
+  A. Replace pthread_jit_write_protect_np with iOS mprotect-based equivalent.
+     On iOS, use: mprotect(addr, size, PROT_READ | PROT_WRITE) to make pages
+                 writable, then mprotect(addr, size, PROT_READ | PROT_EXEC)
+                 to make them executable. No direct equivalent to
+                 pthread_jit_write_protect_np exists.
+  B. Stub it out for now (interpreter mode doesn't need JIT pages).
+  C. Use a conditional: #ifdef __APPLE__ but not TARGET_OS_IPHONE.
+
+PRIORITY 2 — Expect more errors after pthread_jit_write_protect_np
+────────────────────────────────────────────────────────────────
+Once that fixes, expect:
+  - More ios_stubs.cpp functions that need real implementations
+  - Potential Image.cpp WebP/JPEG/PNG issues (image libs found via Homebrew)
+  - Threading issues in pcsx2 core
+
+PRIORITY 3 — Eventually: ARM64 JIT via VIXL
+──────────────────────────────────────────
+The long-term goal per CLAUDE.md is VIXL-based MIPS R5900 → ARM64 recompiler.
+This is Phase 5 of the roadmap, well beyond current build fixes.
+
+================================================================================
+END OF REPORT
+================================================================================

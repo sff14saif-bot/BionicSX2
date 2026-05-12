@@ -1,0 +1,58 @@
+================================================================================
+Phase 2 Build Errors — Iteration 6 Summary
+================================================================================
+
+Latest Build Run: 25612064187
+Status: FAIL (Build step failed)
+
+================================================================================
+ERRORS FIXED SO FAR:
+================================================================================
+
+1. [FIXED] ccc/ast.h not found
+   → Added: ${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/ccc/src
+
+2. [FIXED] SimpleIni.h not found
+   → Added: ${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/simpleini/include
+
+3. [FIXED] IconsFontAwesome.h not found
+   → Added: ${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/include
+
+4. [FIXED] DarwinMisc undeclared (VMManager.cpp)
+   → Added #ifndef PCSX2_TARGET_IOS guards around DarwinMisc code
+
+5. [FIXED] Discord RPC undeclared (VMManager.cpp)
+   → Added #ifndef DISABLE_DISCORD_RPC guards around Discord functions
+
+6. [FIXED] zip.h not found
+   → Added: ${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/libzip/lib
+
+7. [FIXED] zipconf.h not found
+   → Added: ${CMAKE_SOURCE_DIR}/pcsx2/3rdparty/libzip/msvc
+
+================================================================================
+CURRENT ERROR (Iteration 6):
+================================================================================
+
+fatal error: 'SDL3/SDL.h' file not found
+Location: pcsx2/pcsx2/Input/SDLInputSource.h:8:10
+
+================================================================================
+NEXT ACTION:
+================================================================================
+Find SDL3.h and add include path, or guard SDL input code for iOS.
+
+================================================================================
+COMMIT HISTORY:
+================================================================================
+d93375a - Phase 2: Replace PCSX2_CORE_SOURCES with 78+ verified files
+d266611 - Phase 2 fix: Add ccc include path for ast.h
+b87c818 - Phase 2 fix: Add simpleini include path
+70f3c76 - Phase 2 fix: Add 3rdparty/include path for IconsFontAwesome
+7140f9b - Phase 2 fix: Guard DarwinMisc and Discord in VMManager.cpp
+334b01e - Phase 2 fix: Add libzip include path
+0df6384 - Phase 2 fix: Add libzip/msvc include path
+
+================================================================================
+Generated: 2026-05-09
+================================================================================

@@ -1,0 +1,109 @@
+================================================================================
+BIONIC SX2 - PHASE 6 UNDEFINED SYMBOLS REPORT
+================================================================================
+Generated: 2026-05-10
+Build: GitHub Actions Run ID 25634296229
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+When linking pcsx2_core with VMManager::Initialize() calls enabled, there are
+54 unique undefined symbols that prevent the build from completing.
+
+The root cause is that the iOS build includes significantly fewer source files
+than the full PCSX2 build, while VMManager tries to call functions from those
+missing components.
+
+================================================================================
+FULL UNDEFINED SYMBOL LIST (54 symbols)
+================================================================================
+
+| Symbol | Providing File | Category | Action |
+|--------|---------------|----------|--------|
+| DEV9shutdown | pcsx2/pcsx2/DEV9/DEV9.cpp | MISSING | STUB |
+| DEV9close | pcsx2/pcsx2/DEV9/DEV9.cpp | MISSING | STUB |
+| USBclose | pcsx2/pcsx2/USB/USB.cpp | MISSING | STUB |
+| gsIrq | pcsx2/pcsx2/Counters.cpp | IN_BUILD | STUB |
+| AbortWithMessage | NOT_FOUND | MISSING | STUB |
+| SaveState_ZipToDisk | pcsx2/pcsx2/SaveState.cpp | IN_BUILD | NEED libzip |
+| SaveState_DownloadState | pcsx2/pcsx2/SaveState.cpp | IN_BUILD | NEED libzip |
+| SaveState_SaveScreenshot | pcsx2/pcsx2/SaveState.cpp | IN_BUILD | NEED libzip |
+| SaveStateSelectorUI::Clear | pcsx2/pcsx2/ImGui/FullscreenUI_Settings.cpp | MISSING | STUB |
+| FullscreenUI::GameChanged | pcsx2/pcsx2/ImGui/FullscreenUI.cpp | MISSING | STUB |
+| FullscreenUI::OnVMDestroyed | pcsx2/pcsx2/ImGui/FullscreenUI.cpp | MISSING | STUB |
+| Achievements::GameChanged | pcsx2/pcsx2/Achievements.cpp | MISSING | STUB |
+| Achievements::IsHardcoreModeActive | pcsx2/pcsx2/Achievements.cpp | MISSING | STUB |
+| AudioStream::GetBackendName | pcsx2/pcsx2/Host/AudioStream.cpp | MISSING | STUB |
+| AudioStream::ParseBackendName | pcsx2/pcsx2/Host/AudioStream.cpp | MISSING | STUB |
+| AudioStreamParameters::LoadSave | pcsx2/pcsx2/Host/AudioStream.cpp | MISSING | STUB |
+| GameDatabase::findGame | pcsx2/pcsx2/GameDatabase.cpp | MISSING | STUB |
+| GameDatabaseSchema::GameEntry | pcsx2/pcsx2/GameDatabase.h | MISSING | STUB |
+| GameList::AddPlayedTimeForSerial | pcsx2/pcsx2/GameList.cpp | MISSING | STUB |
+| InputManager::ReloadSources | pcsx2/pcsx2/Input/InputManager.cpp | IN_BUILD | MAYBE_EXCLUDE |
+| InputManager::ReloadBindings | pcsx2/pcsx2/Input/InputManager.cpp | IN_BUILD | MAYBE_EXCLUDE |
+| InputManager::SetPadVibrationIntensity | pcsx2/pcsx2/SIO/Pad/PadNegcon.cpp | IN_BUILD | ADD pad sources |
+| InputRecording::stop | pcsx2/pcsx2/Recording/InputRecording.cpp | MISSING | GUARD #ifdef |
+| InputRecording::isActive | pcsx2/pcsx2/Recording/InputRecording.cpp | MISSING | GUARD #ifdef |
+| INISettingsInterface | pcsx2/pcsx2/Host/INISettingsInterface.cpp | MISSING | ADD/STUB |
+| SharedMemoryMappingArea | pcsx2/pcsx2/Memory.cpp | IN_BUILD | STUB (mmap not on iOS) |
+| Threading::KernelSemaphore | pcsx2/pcsx2/Threading.cpp | IN_BUILD | STUB |
+| Threading::Thread | pcsx2/pcsx2/Threading.cpp | IN_BUILD | STUB |
+| Threading::ThreadHandle | pcsx2/pcsx2/Threading.cpp | IN_BUILD | STUB |
+| USB::GetConfigSection | pcsx2/pcsx2/USB/USB.cpp | MISSING | STUB |
+| USB::DeviceTypeIndexToName | pcsx2/pcsx2/USB/USB.cpp | MISSING | STUB |
+| USB::DeviceTypeNameToIndex | pcsx2/pcsx2/USB/USB.cpp | MISSING | STUB |
+| GSCapture::EndCapture | pcsx2/pcsx2/GS/GS.cpp | MISSING | STUB |
+| GSCapture::IsCapturing | pcsx2/pcsx2/GS/GS.cpp | MISSING | STUB |
+| GSTextureReplacements::GameChanged | pcsx2/pcsx2/GS/Renderers/HW/GSTextureReplacements.cpp | MISSING | STUB |
+| Host::OnGameChanged | pcsx2/pcsx2/VMManager.cpp | IN_BUILD | Host_iOS.mm provides |
+| Host::OnVMDestroyed | pcsx2/pcsx2/VMManager.cpp | IN_BUILD | Host_iOS.mm provides |
+| Host::OnSaveStateSaved | pcsx2/pcsx2/VMManager.cpp | IN_BUILD | Host_iOS.mm provides |
+| Common::InhibitScreensaver | MISSING | MISSING | STUB |
+| PadBase constructors/destructors | pcsx2/pcsx2/SIO/Pad/*.cpp | IN_BUILD | ADD pad sources |
+| PadGuitar/PadJogcon/PadNegcon/PadPopn | pcsx2/pcsx2/SIO/Pad/*.cpp | IN_BUILD | ADD pad sources |
+
+================================================================================
+ACTION BREAKDOWN
+================================================================================
+
+| Action | Count | Symbols |
+|--------|-------|---------|
+| STUB | 30 | DEV9, USB, GS, AudioStream, Achievements, FullscreenUI, GameDatabase, Threading, Common, etc. |
+| ADD pad sources | 8 | PadBase, PadGuitar, PadJogcon, PadNegcon, PadPopn |
+| GUARD #ifdef | 2 | InputRecording::stop, InputRecording::isActive |
+| Host_iOS.mm provides | 3 | Host::OnGameChanged, Host::OnVMDestroyed, Host::OnSaveStateSaved |
+| IN_BUILD + stub | 5 | gsIrq, SharedMemoryMappingArea, Threading (various) |
+| NEED libzip | 3 | SaveState_ZipToDisk, SaveState_DownloadState, SaveState_SaveScreenshot |
+
+================================================================================
+RECOMMENDED FIX STRATEGY
+================================================================================
+
+1. STUB ALL MISSING FUNCTIONS (30 symbols)
+   - Add comprehensive stubs in ios/platform/PCSX2Stubs.mm
+   - Each stub should log and return empty/zero values
+
+2. ADD PAD SOURCES (8 symbols)
+   - Add SIO/Pad/*.cpp to PCSX2_CORE_SOURCES in CMakeLists.txt
+
+3. GUARD INPUT RECORDING (2 symbols)
+   - Add #ifndef PCSX2_TARGET_IOS around InputRecording.cpp sources
+
+4. DISABLE UNNEEDED FEATURES
+   - Set EmuConfig to disable Achievements, Recording, GameList
+   - This avoids calling many of the missing functions at runtime
+
+5. PROVIDE FALLBACK HOST IMPLEMENTATIONS
+   - Host::OnGameChanged, Host::OnVMDestroyed, Host::OnSaveStateSaved are already
+     implemented in Host_iOS.mm, but may need additional overloads
+
+================================================================================
+BUILD STATUS
+================================================================================
+
+Current Status: FAILS at linking stage
+Last Working Commit: 373e0f8 (Phase 6 simplified - VMManager stubbed)
+Failed Commit: 9aae485 (Phase 6b - VMManager::Initialize enabled)
+
+================================================================================

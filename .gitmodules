@@ -1,0 +1,16 @@
+[submodule "src/ARMSX2"]
+	path = src/ARMSX2
+	url = https://github.com/ARMSX2/ARMSX2.git
+
+[submodule "pcsx2/3rdparty/ryml"]
+	path = pcsx2/3rdparty/ryml
+	url = https://github.com/biojppm/rapidyaml.git
+[submodule "3rdparty/libjpeg-turbo"]
+	path = 3rdparty/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
+[submodule "3rdparty/libwebp"]
+	path = 3rdparty/libwebp
+	url = https://chromium.googlesource.com/webm/libwebp
+[submodule "3rdparty/libpng"]
+	path = 3rdparty/libpng
+	url = https://github.com/glennrp/libpng.git

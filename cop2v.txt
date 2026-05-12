@@ -1,0 +1,700 @@
+================================================================================
+BIONICSX2 — PHASE 1 AUDIT REPORT
+Session Date: 2026-05-08
+================================================================================
+
+================================================================================
+STEP 1 — FULL REPOSITORY AUDIT
+================================================================================
+
+--- 1. Repository Structure (find output) ---
+
+Key directories found:
+./.github/workflows/build-ipa.yml
+./ARMSX2/ (submodule — Android fork, contains pcsx2/, 3rdparty/, app/)
+./ios/platform/ (HostSys_iOS.cpp, CocoaTools.mm, AudioStream_iOS.cpp, Filesystem_iOS.cpp)
+./pcsx2/ (PCSX2 upstream sources — NOT yet included in BionicSX2 build)
+./pcsx2/3rdparty/ (cubeb, ffmpeg, cpuinfo, xbyak, googletest, etc.)
+./pcsx2/common/ (common libs: FileSystem, Image, Console, etc.)
+./pcsx2/pcsx2/ (main PCSX2 sources: GS, EE, VU, IOP, x86/)
+./cmake/ios.toolchain.cmake
+
+NOTABLE: BionicSX2/CMakeLists.txt only includes 4 iOS platform files.
+NO pcsx2/ sources are currently built.
+
+--- 2. CMakeLists.txt (main) — Full Content ---
+
+cmake_minimum_required(VERSION 3.20)
+
+project(BionicSX2
+    VERSION 0.1.0
+    LANGUAGES C CXX OBJC OBJCXX
+)
+
+# iOS Target Guard
+if(NOT PCSX2_TARGET_IOS)
+    message(FATAL_ERROR
+        "BionicSX2 is an iOS-only project.\n"
+        "Configure with: -DPCSX2_TARGET_IOS=ON\n"
+        "and: -DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake"
+    )
+endif()
+
+# C++ Standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ARM64 Verification
+if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+    message(FATAL_ERROR
+        "BionicSX2 requires ARM64. Got: ${CMAKE_SYSTEM_PROCESSOR}"
+    )
+endif()
+
+# Global Compile Definitions
+add_compile_definitions(
+    PCSX2_TARGET_IOS=1
+    _M_ARM64=1
+    TARGET_OS_IPHONE=1
+    DISABLE_PCSX2_RECOMPILER=1
+    DISABLE_VULKAN=1
+    DISABLE_ANDROID=1
+)
+
+# Apple Frameworks
+find_library(FW_METAL          Metal          REQUIRED)
+find_library(FW_METALKIT       MetalKit       REQUIRED)
+find_library(FW_AVFOUNDATION   AVFoundation   REQUIRED)
+find_library(FW_AUDIOTOOLBOX   AudioToolbox   REQUIRED)
+find_library(FW_UIKIT          UIKit          REQUIRED)
+find_library(FW_FOUNDATION     Foundation     REQUIRED)
+find_library(FW_QUARTZCORE     QuartzCore     REQUIRED)
+find_library(FW_COREGRAPHICS   CoreGraphics   REQUIRED)
+
+# iOS Platform Layer
+set(IOS_PLATFORM_SOURCES
+    ios/platform/HostSys_iOS.cpp
+    ios/platform/CocoaTools.mm
+    ios/platform/AudioStream_iOS.cpp
+    ios/platform/Filesystem_iOS.cpp
+)
+
+# Main Executable
+add_executable(BionicSX2
+    ${IOS_PLATFORM_SOURCES}
+)
+
+target_include_directories(BionicSX2 PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/ios/platform
+)
+
+target_link_libraries(BionicSX2 PRIVATE
+    ${APPLE_FRAMEWORKS}
+)
+
+# iOS Bundle Properties
+set_target_properties(BionicSX2 PROPERTIES
+    MACOSX_BUNDLE                   TRUE
+    MACOSX_BUNDLE_INFO_PLIST        ${CMAKE_SOURCE_DIR}/ios/Info.plist
+    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
+    XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED NO
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.bionics2.emulator"
+    XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "14.2"
+    XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS
+        "${CMAKE_SOURCE_DIR}/ios/entitlements/BionicSX2.entitlements"
+)
+
+--- 3. cmake/ios.toolchain.cmake — Full Content ---
+
+set(CMAKE_SYSTEM_NAME iOS)
+set(CMAKE_SYSTEM_PROCESSOR arm64)
+set(CMAKE_OSX_ARCHITECTURES "arm64")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14.2" CACHE STRING "Minimum iOS version")
+set(CMAKE_OSX_SYSROOT iphoneos)
+set(CMAKE_C_COMPILER   /usr/bin/clang)
+set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+add_compile_definitions(_M_ARM64=1)
+add_compile_definitions(TARGET_OS_IPHONE=1)
+add_compile_definitions(PCSX2_TARGET_IOS=1)
+add_compile_definitions(DISABLE_PCSX2_RECOMPILER=1)
+add_compile_definitions(DISABLE_VULKAN=1)
+add_compile_definitions(DISABLE_ANDROID=1)
+
+set(IOS_FRAMEWORKS
+    Metal MetalKit AVFoundation AudioToolbox UIKit Foundation CoreGraphics QuartzCore
+)
+foreach(FW ${IOS_FRAMEWORKS})
+    find_library(FW_${FW} ${FW} REQUIRED)
+endforeach()
+
+--- 4. .github/workflows/build-ipa.yml — Full Content ---
+
+name: BionicSX2 — Build IPA
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Install CMake
+        run: brew install cmake ninja
+
+      - name: Configure CMake for iOS
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake \
+            -DPCSX2_TARGET_IOS=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISABLE_PCSX2_RECOMPILER=ON \
+            -DDISABLE_VULKAN=ON \
+            -DDISABLE_ANDROID=ON \
+            -D_M_ARM64=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Archive IPA
+        run: |
+          xcodebuild archive \
+            -scheme BionicSX2 \
+            -sdk iphoneos \
+            -archivePath build/BionicSX2.xcarchive \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export IPA
+        run: |
+          mkdir -p build/ipa
+          cp -r build/BionicSX2.xcarchive/Products/Applications/BionicSX2.app \
+            build/ipa/
+          cd build/ipa
+          mkdir Payload
+          cp -r BionicSX2.app Payload/
+          zip -r BionicSX2.ipa Payload/
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BionicSX2-unsigned
+          path: build/ipa/BionicSX2.ipa
+          retention-days: 30
+
+--- 5. Android Dependencies Audit (grep results) ---
+
+Files containing Android API references (in pcsx2/3rdparty — NOT currently built):
+
+pcsx2/3rdparty/cubeb/src/cubeb-jni.cpp:
+  - #include "jni.h"
+  - JNIEnv*, jobject, jstring usage
+  - Android AudioManager JNI calls
+
+pcsx2/3rdparty/cubeb/src/cubeb-jni.h:
+  - typedef struct cubeb_jni cubeb_jni;
+  - cubeb_jni_init(), cubeb_jni_destroy()
+
+pcsx2/3rdparty/cubeb/src/cubeb-jni-instances.h:
+  - JNI instances management
+
+pcsx2/3rdparty/ffmpeg/include/libavcodec/jni.h:
+  - av_jni_set_java_vm(), av_jni_get_java_vm()
+  - Android application context
+
+pcsx2/3rdparty/ffmpeg/include/libavcodec/mediacodec.h:
+  - Android MediaCodec Surface references
+
+pcsx2/3rdparty/cpuinfo/src/arm/android/api.h:
+  - cpuinfo_android_chipset_property enum
+  - Android-specific property parsing
+
+pcsx2/3rdparty/cpuinfo/CMakeLists.txt:
+  - android_properties source inclusion
+
+pcsx2/3rdparty/googletest/googletest/include/gtest/internal/gtest-port.h:
+  - #include <android/api-level.h>
+
+CRITICAL NOTE: BionicSX2/CMakeLists.txt does NOT include any pcsx2/ sources.
+The 3rdparty Android code is NOT part of the current build.
+
+--- 6. x86 Code Paths Audit (grep results) ---
+
+pcsx2/CMakeLists.txt (lines 982-1042):
+  - pcsx2x86Sources: iCore.cpp, recVTLB.cpp, x86Emitter, microVU, etc.
+  - pcsx2x86Headers: iCore.h, microVU.h, etc.
+  - These are added WITHOUT if(ARCH_X86) guard
+
+pcsx2/pcsx2/VMManager.cpp:
+  - Line 56: #include "common/emitter/x86emitter.h"
+  - Line 218: cpuinfo_has_x86_sse4_1() call
+  - Line 227: #if _M_SSE >= 0x0501 (AVX2 check)
+  - Line 402: x86Emitter::use_avx = g_cpu.vectorISA >= ProcessorFeatures::VectorISA::AVX
+
+pcsx2/pcsx2/vtlb.h:
+  - Lines 192-194: Comments mentioning "x86 physical" (documentation only)
+
+pcsx2/pcsx2/Config.h:
+  - Line 1099: VUOverflowHack comment about x86 (documentation only)
+
+pcsx2/common/CMakeLists.txt:
+  - Lines 90+: Correctly uses ARCH_X86 guard for emitter files ✓
+
+pcsx2/pcsx2/CMakeLists.txt:
+  - Line 756-757: MSVC AVX/AVX2 flags (Windows only, guarded by MSVC)
+
+--- 7. mmap / JIT Memory Audit (grep results) ---
+
+pcsx2/common/Linux/LnxHostSys.cpp:
+  - Line 160: mmap with MAP_ANONYMOUS|MAP_PRIVATE
+  - Line 165: mmap(nullptr, size, PROT_NONE, flags, -1, 0)
+  - Line 181: mmap with MAP_SHARED|MAP_FIXED (file mapping)
+  - Line 202: mmap with PROT_NONE|MAP_ANONYMOUS|MAP_FIXED (guard pages)
+
+pcsx2/common/CrashHandler.cpp:
+  - Line 230: mmap with PROT_READ|PROT_WRITE|MAP_ANONYMOUS
+
+pcsx2/pcsx2/GS/GS.cpp:
+  - Line 990: mmap with PROT_READ|PROT_WRITE|MAP_SHARED (shared memory)
+
+pcsx2/pcsx2/DEV9/DEV9.cpp:
+  - Line 152: mmap with PROT_READ|PROT_WRITE|MAP_FILE|MAP_SHARED
+
+pcsx2/3rdparty/xbyak/xbyak/xbyak.h:
+  - Lines 515-542: xbyak JIT mmap with PROT_EXEC ← CRITICAL for JIT
+
+ios/platform/HostSys_iOS.cpp:
+  - Uses vm_allocate/vm_deallocate (correct for iOS)
+  - HostSys_MemProtect is STUB (TODO: pthread_jit_write_protect_np)
+
+--- 8. WebP Usage Audit (grep results) ---
+
+pcsx2/common/Image.cpp:
+  - Line 14-15: #include <webp/decode.h>, <webp/encode.h>
+  - Line 27: static bool WebPBufferLoader(...) — forward declaration (static)
+  - Line 28: static bool WebPBufferSaver(...) — forward declaration (static)
+  - Line 50: {"webp", WebPBufferLoader, WebPBufferSaver, ...} in table
+  - Lines 385-407: anonymous namespace { ... }
+  - Line 688: bool WebPBufferLoader(...) — definition (inside anonymous namespace)
+  - Line 710: bool WebPBufferSaver(...) — definition (inside anonymous namespace)
+
+AMBIGUITY ISSUE:
+  - Lines 27-28: forward declarations use 'static' keyword (file-static scope)
+  - Lines 688, 710: definitions are inside anonymous namespace (different scope)
+  - This creates TWO different sets of functions → LINKER ERROR
+  - Fix: Remove 'static' from lines 27-28 (anonymous namespace suffices)
+
+Other WebP references:
+  - pcsx2/pcsx2/Config.h:373: WebP in enum
+  - pcsx2/pcsx2/GameList.cpp:1262: .webp extension
+  - pcsx2/pcsx2/ImGui/FullscreenUI.cpp:1083: WebP background check
+  - pcsx2/pcsx2/GS/Renderers/Common/GSRenderer.cpp:460: "webp" in list
+  - pcsx2/common/CMakeLists.txt:207: WebP::libwebp (dependency)
+
+--- 9. Vulkan References Audit (grep results) ---
+
+pcsx2/pcsx2/CMakeLists.txt:
+  - Lines 631-649: Vulkan sources (GSDeviceVK.cpp, GSTextureVK.cpp, etc.)
+  - Line 651: target_link_libraries with vulkan-headers
+  - Lines 1413-1421: MoltenVK path (macOS only)
+
+pcsx2/pcsx2/GS/GS.cpp:
+  - Line 34: #include "GS/Renderers/Vulkan/GSDeviceVK.h"
+  - Line 86: return RenderAPI::Vulkan
+  - Line 133: case RenderAPI::Vulkan:
+
+pcsx2/pcsx2/GS/GSUtil.cpp:
+  - Line 13: #include "GS/Renderers/Vulkan/GSDeviceVK.h"
+
+pcsx2/pcsx2/GS/GS.h:
+  - Line 22: Vulkan in GSRendererType enum
+
+pcsx2/pcsx2/Pcsx2Config.cpp:
+  - Line 696: case GSRendererType::VK: return "Vulkan"
+
+pcsx2/pcsx2/ImGui/FullscreenUI_Settings.cpp:
+  - Line 2716: "Vulkan" string
+  - Line 5582: TRANSLATE_NOOP("FullscreenUI", "Vulkan")
+
+pcsx2/pcsx2/VMManager.cpp:
+  - Line 2583: Comment about vulkaninfo
+
+NOTE: BionicSX2 sets DISABLE_VULKAN=1 globally, but the source files
+      still reference Vulkan headers. The files must be guarded with
+      #ifdef DISABLE_VULKAN or excluded from CMake.
+
+--- 10. iOS Platform Layer Files ---
+
+=== HostSys_iOS.cpp ===
+#include <mach/mach.h>
+#include <mach/vm_map.h>
+#include <pthread.h>
+
+void* HostSys_Alloc(size_t size):
+  - Uses vm_allocate(mach_task_self(), &addr, size, VM_FLAGS_ANYWHERE) ✓
+  - Returns nullptr on failure ✓
+
+void HostSys_MemProtect(void* base, size_t size, int prot):
+  - STUB — empty function ✗
+  - TODO: pthread_jit_write_protect_np() for W^X
+
+void HostSys_Free(void* ptr, size_t size):
+  - Uses vm_deallocate(mach_task_self(), addr, size) ✓
+
+=== CocoaTools.mm ===
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#import <QuartzCore/CAMetalLayer.h>
+
+std::string GetBundlePath():
+  - Uses [[NSBundle mainBundle] bundlePath] ✓
+
+std::string GetResourcePath():
+  - Uses NSSearchPathForDirectoriesInDomains(NSDocumentDirectory) ✓
+
+CAMetalLayer* CreateMetalLayer(UIView* view):
+  - Creates CAMetalLayer, sets device, pixelFormat, frame ✓
+  - Adds layer to view ✓
+
+void DestroyMetalLayer(CAMetalLayer* layer):
+  - [layer removeFromSuperlayer] ✓
+
+float GetViewRefreshRate():
+  - Uses UIScreen.mainScreen.maximumFramesPerSecond (iOS 15+) ✓
+  - Fallback: 60.0f for iOS 14.2 ✓
+
+=== AudioStream_iOS.cpp ===
+#include <AudioToolbox/AudioToolbox.h>
+
+ALL FUNCTIONS ARE STUBS:
+  - AudioStream_InitSession() — TODO: AVAudioSession setup
+  - AudioStream_Start() — TODO: AVAudioEngine setup
+  - AudioStream_Stop() — TODO: [engine stop]
+  - AudioStream_WriteSamples() — TODO: AVAudioPlayerNode buffer
+
+No Oboe references ✓ (correctly excluded)
+
+=== Filesystem_iOS.cpp ===
+
+ALL FUNCTIONS RETURN "" (stubs):
+  - Filesystem_GetDocumentsPath() — TODO: NSDocumentDirectory
+  - Filesystem_GetLibraryPath() — TODO: NSLibraryDirectory
+  - Filesystem_GetTempPath() — TODO: NSTemporaryDirectory()
+  - Filesystem_GetBIOSPath() — TODO: Documents/bios/
+  - Filesystem_GetMemCardPath() — TODO: Documents/memcards/
+  - Filesystem_GetSaveStatePath() — TODO: Documents/sstates/
+
+================================================================================
+STEP 2 — AUDIT REPORT
+================================================================================
+
+=== ANDROID DEPENDENCIES AUDIT ===
+
+Files containing Android API (in pcsx2/3rdparty — NOT currently built by BionicSX2):
+
+1. pcsx2/3rdparty/cubeb/src/cubeb-jni.cpp (contains JNIEnv*, jobject, jstring)
+2. pcsx2/3rdparty/cubeb/src/cubeb-jni.h (cubeb_jni struct definition)
+3. pcsx2/3rdparty/cubeb/src/cubeb-jni-instances.h (JNI instances)
+4. pcsx2/3rdparty/ffmpeg/include/libavcodec/jni.h (av_jni_set_java_vm)
+5. pcsx2/3rdparty/ffmpeg/include/libavcodec/mediacodec.h (Android MediaCodec)
+6. pcsx2/3rdparty/cpuinfo/src/arm/android/api.h (Android properties)
+7. pcsx2/3rdparty/cpuinfo/CMakeLists.txt (android_properties sources)
+
+CRITICAL NOTE: BionicSX2/CMakeLists.txt does NOT include any pcsx2/ directory.
+No PCSX2 code is currently being built.
+
+=== X86 CODE PATHS AUDIT ===
+
+1. pcsx2/CMakeLists.txt:982-1042 — pcsx2x86Sources list (iCore.cpp, recVTLB.cpp, x86Emitter, microVU, etc.)
+2. pcsx2/pcsx2/VMManager.cpp:56 — #include "common/emitter/x86emitter.h"
+3. pcsx2/pcsx2/VMManager.cpp:218 — cpuinfo_has_x86_sse4_1() call
+4. pcsx2/pcsx2/VMManager.cpp:227 — #if _M_SSE >= 0x0501 (AVX2 check)
+5. pcsx2/pcsx2/VMManager.cpp:402 — x86Emitter::use_avx = ...
+6. pcsx2/pcsx2/vtlb.h:192-194 — Comments mentioning "x86 physical" (documentation only)
+7. pcsx2/pcsx2/Config.h:1099 — VUOverflowHack comment about x86 (documentation only)
+8. pcsx2/common/CMakeLists.txt:90+ — ARCH_X86 guard for emitter files (CORRECT)
+
+NOTE: pcsx2/CMakeLists.txt adds x86 sources without if(ARCH_X86) guard.
+
+=== MMAP / JIT MEMORY AUDIT ===
+
+1. pcsx2/common/Linux/LnxHostSys.cpp:160 — mmap with MAP_ANONYMOUS|MAP_PRIVATE
+2. pcsx2/common/Linux/LnxHostSys.cpp:165 — mmap(nullptr, size, PROT_NONE, ...)
+3. pcsx2/common/Linux/LnxHostSys.cpp:181 — mmap with MAP_SHARED|MAP_FIXED
+4. pcsx2/common/Linux/LnxHostSys.cpp:202 — mmap with PROT_NONE|MAP_ANONYMOUS
+5. pcsx2/common/CrashHandler.cpp:230 — mmap with PROT_READ|PROT_WRITE|MAP_ANONYMOUS
+6. pcsx2/pcsx2/GS/GS.cpp:990 — mmap with PROT_READ|PROT_WRITE|MAP_SHARED
+7. pcsx2/pcsx2/DEV9/DEV9.cpp:152 — mmap with PROT_READ|PROT_WRITE|MAP_FILE
+8. pcsx2/3rdparty/xbyak/xbyak/xbyak.h:515-542 — xbyak mmap with PROT_EXEC (JIT)
+
+BionicSX2:
+- ios/platform/HostSys_iOS.cpp: Uses vm_allocate (correct for iOS)
+- HostSys_iOS.cpp:23-26 — HostSys_MemProtect is empty stub ✗
+  TODO: implement using pthread_jit_write_protect_np
+
+=== WEBP AMBIGUITY AUDIT ===
+
+File: pcsx2/common/Image.cpp
+
+Problem:
+- Lines 27-28: `static bool WebPBufferLoader(...);` and `static bool WebPBufferSaver(...);`
+  Forward declarations use 'static' keyword (file-static scope)
+- Lines 385-407: anonymous namespace { ... }
+- Lines 688, 710: Function definitions are INSIDE anonymous namespace
+
+This is NOT a true "namespace conflict" but creates TWO different entities:
+1. File-static declarations (lines 27-28) — visible only in translation unit
+2. Anonymous namespace definitions (lines 688, 710) — different linkage
+
+Result: LINKER ERROR — the table at line 50 references the anonymous namespace versions,
+but the static declarations at lines 27-28 are unused (or vice versa depending on compiler).
+
+Fix: Remove 'static' keyword from lines 27-28 since the definitions are in anonymous namespace.
+Do NOT remove WebP support — only fix the ambiguity.
+
+=== VULKAN REFERENCES AUDIT ===
+
+Files that must be excluded from iOS build:
+
+1. pcsx2/pcsx2/CMakeLists.txt:631-649 — Vulkan sources (GSDeviceVK.cpp, etc.)
+2. pcsx2/pcsx2/CMakeLists.txt:651 — target_link_libraries with vulkan-headers
+3. pcsx2/pcsx2/CMakeLists.txt:1413-1421 — MoltenVK path (macOS only)
+4. pcsx2/pcsx2/GS/GS.cpp:34 — #include "GS/Renderers/Vulkan/GSDeviceVK.h"
+5. pcsx2/pcsx2/GS/GS.cpp:86 — return RenderAPI::Vulkan
+6. pcsx2/pcsx2/GS/GSUtil.cpp:13 — #include "GS/Renderers/Vulkan/GSDeviceVK.h"
+7. pcsx2/pcsx2/GS/GS.h:22 — Vulkan in GSRendererType enum
+8. pcsx2/pcsx2/Pcsx2Config.cpp:696 — case GSRendererType::VK
+9. pcsx2/pcsx2/ImGui/FullscreenUI_Settings.cpp:2716 — "Vulkan" string
+
+NOTE: BionicSX2 CMakeLists.txt sets DISABLE_VULKAN=1 but does not
+      prevent source files from including Vulkan headers.
+      Files must be guarded with #ifdef DISABLE_VULKAN or excluded in CMake.
+
+=== iOS PLATFORM LAYER STATUS ===
+
+1. ios/platform/HostSys_iOS.cpp
+   Status: INCOMPLETE
+   - HostSys_Alloc: Implemented (uses vm_allocate) ✓
+   - HostSys_MemProtect: EMPTY STUB ✗ — needs pthread_jit_write_protect_np
+   - HostSys_Free: Implemented (uses vm_deallocate) ✓
+
+2. ios/platform/CocoaTools.mm
+   Status: INCOMPLETE (all functions work but marked Phase 2)
+   - GetBundlePath: Implemented ✓
+   - GetResourcePath: Implemented ✓
+   - CreateMetalLayer: Implemented ✓
+   - DestroyMetalLayer: Implemented ✓
+   - GetViewRefreshRate: Implemented ✓
+
+3. ios/platform/AudioStream_iOS.cpp
+   Status: ALL STUBS
+   - AudioStream_InitSession: stub ✗
+   - AudioStream_Start: stub ✗
+   - AudioStream_Stop: stub ✗
+   - AudioStream_WriteSamples: stub ✗
+
+4. ios/platform/Filesystem_iOS.cpp
+   Status: ALL STUBS (all functions return "")
+   - Filesystem_GetDocumentsPath: stub ✗
+   - Filesystem_GetLibraryPath: stub ✗
+   - Filesystem_GetTempPath: stub ✗
+   - Filesystem_GetBIOSPath: stub ✗
+   - Filesystem_GetMemCardPath: stub ✗
+   - Filesystem_GetSaveStatePath: stub ✗
+
+=== CMakeLists.txt ASSESSMENT ===
+
+BionicSX2/CMakeLists.txt:
+- PCSX2_TARGET_IOS flag: PRESENT ✓
+- Disables x86 JIT: YES (DISABLE_PCSX2_RECOMPILER=1) ✓
+- Excludes Android: YES (DISABLE_ANDROID=1) ✓
+- Excludes Vulkan: YES (DISABLE_VULKAN=1) ✓
+- Links Metal/UIKit/AVFoundation: YES ✓
+- Sets _M_ARM64: YES ✓
+
+CRITICAL PROBLEMS:
+1. Does NOT include any pcsx2/ directory sources — NO PCSX2 CODE IS BUILT
+2. Does NOT include common/ directory — missing Threading.h, Console.h, etc.
+3. Does NOT have target_include_directories for pcsx2/ sources
+4. pcsx2/CMakeLists.txt adds x86 sources without ARCH_X86 guard
+5. pcsx2/CMakeLists.txt adds Vulkan sources without DISABLE_VULKAN guard
+
+pcsx2/CMakeLists.txt (upstream):
+- PCSX2_TARGET_IOS flag: NOT PRESENT (this is upstream PCSX2 file)
+- x86 sources: Added without if(ARCH_X86) — will cause errors on ARM64 build
+- Vulkan sources: Added without if(NOT DISABLE_VULKAN) — should be excluded
+
+=== BLOCKING ISSUES FOR PHASE 1 BUILD ===
+
+Sorted by priority (highest to lowest):
+
+1. [HIGH] BionicSX2/CMakeLists.txt does NOT include pcsx2/ directory
+   — No PCSX2 code is currently added to the build
+   Effort: HIGH
+
+2. [HIGH] pcsx2/CMakeLists.txt adds x86 sources (iCore.cpp, recVTLB.cpp, etc.)
+   without ARCH_X86 guard — will cause build failures on ARM64
+   Effort: MEDIUM
+
+3. [HIGH] pcsx2/CMakeLists.txt adds Vulkan sources without DISABLE_VULKAN guard
+   — Vulkan headers will fail on iOS (no MoltenVK in iOS build)
+   Effort: MEDIUM
+
+4. [HIGH] pcsx2/pcsx2/VMManager.cpp contains x86-specific calls
+   (cpuinfo_has_x86_sse4_1, x86Emitter) — must be guarded with #ifdef
+   Effort: MEDIUM
+
+5. [MEDIUM] HostSys_iOS.cpp — HostSys_MemProtect is empty stub
+   — Required for JIT memory protection on iOS
+   Effort: LOW (use pthread_jit_write_protect_np)
+
+6. [MEDIUM] AudioStream_iOS.cpp — All functions are stubs
+   — Required for audio output
+   Effort: MEDIUM (AVAudioEngine setup)
+
+7. [MEDIUM] Filesystem_iOS.cpp — All functions return ""
+   — Required for correct iOS sandbox paths
+   Effort: LOW (NSSearchPathForDirectoriesInDomains)
+
+8. [MEDIUM] WebP ambiguity in Image.cpp — static + anonymous namespace conflict
+   — Will cause linker errors
+   Effort: LOW (remove 'static' from lines 27-28)
+
+9. [LOW] pcsx2/3rdparty/ contains Android/JNI code
+   — Must ensure these are NOT included in iOS build
+   Effort: LOW (verify CMake exclusion)
+
+10. [LOW] MoltenVK reference in pcsx2/CMakeLists.txt
+    — Not needed for iOS (Metal is the backend)
+    Effort: LOW (guard with if(NOT IOS))
+
+================================================================================
+STEP 3 — FIX PLAN (Pre-Modification)
+================================================================================
+
+For each Blocking Issue:
+
+--- Issue #1: BionicSX2/CMakeLists.txt does NOT include pcsx2/ sources ---
+File: BionicSX2/CMakeLists.txt
+Location: Lines 69-71 (add_executable block)
+What to do:
+  - Add pcsx2/ subdirectory with proper iOS guards
+  - Create a new pcsx2/CMakeLists.txt that respects PCSX2_TARGET_IOS
+  - Add common/ as a library target
+  - Add pcsx2/pcsx2/ sources with x86/Vulkan excluded
+iOS API alternative: N/A (build system change)
+Effort: HIGH
+
+--- Issue #2: pcsx2/CMakeLists.txt adds x86 sources without ARCH_X86 guard ---
+File: pcsx2/CMakeLists.txt
+Location: Lines 982-1042 (pcsx2x86Sources)
+What to do:
+  - Wrap entire x86 section with: if(NOT PCSX2_TARGET_IOS) or if(ARCH_X86)
+  - Use #ifdef PCSX2_TARGET_IOS in source files for x86-specific #includes
+iOS API alternative: N/A (use interpreter fallback)
+Effort: MEDIUM
+
+--- Issue #3: pcsx2/CMakeLists.txt adds Vulkan sources without DISABLE_VULKAN guard ---
+File: pcsx2/CMakeLists.txt
+Location: Lines 631-649 (Vulkan sources)
+What to do:
+  - Wrap Vulkan sources with: if(NOT DISABLE_VULKAN) or if(NOT PCSX2_TARGET_IOS)
+  - Guard Vulkan #includes in source files with #ifndef DISABLE_VULKAN
+iOS API alternative: Metal (already linked)
+Effort: MEDIUM
+
+--- Issue #4: VMManager.cpp contains x86-specific calls ---
+File: pcsx2/pcsx2/VMManager.cpp
+Location: Lines 56, 218, 227, 402
+What to do:
+  - Line 56: Guard with #ifndef PCSX2_TARGET_IOS or #ifdef _M_ARM64
+  - Lines 218-233: Wrap SSE/AVX checks with #ifdef _M_X86
+  - Line 402: Guard x86Emitter::use_avx with #ifdef _M_X86
+iOS API alternative: ARM64 NEON intrinsics (from ARMSX2)
+Effort: MEDIUM
+
+--- Issue #5: HostSys_MemProtect is empty stub ---
+File: ios/platform/HostSys_iOS.cpp
+Location: Lines 23-26
+What to do:
+  - Implement using pthread_jit_write_protect_np()
+  - Map prot flags to mach vm_prot_t
+  - For PROT_EXEC: call pthread_jit_write_protect_np(true) after write
+  - For PROT_WRITE: call pthread_jit_write_protect_np(false) before write
+iOS API: pthread_jit_write_protect_np (iOS 14.2+)
+Effort: LOW
+
+--- Issue #6: AudioStream_iOS.cpp all stubs ---
+File: ios/platform/AudioStream_iOS.cpp
+Location: Entire file
+What to do:
+  - Implement AudioStream_InitSession() with AVAudioSession setup
+  - Implement AudioStream_Start() with AVAudioEngine
+  - Implement AudioStream_Stop() with [engine stop]
+  - Implement AudioStream_WriteSamples() with AVAudioPlayerNode
+iOS API: AVAudioSession, AVAudioEngine, AVAudioPlayerNode
+Effort: MEDIUM
+
+--- Issue #7: Filesystem_iOS.cpp all stubs ---
+File: ios/platform/Filesystem_iOS.cpp
+Location: Entire file
+What to do:
+  - Implement Filesystem_GetDocumentsPath() with NSDocumentDirectory
+  - Implement Filesystem_GetLibraryPath() with NSLibraryDirectory
+  - Implement Filesystem_GetTempPath() with NSTemporaryDirectory()
+  - Implement Filesystem_GetBIOSPath() = Documents/bios/
+  - Implement Filesystem_GetMemCardPath() = Documents/memcards/
+  - Implement Filesystem_GetSaveStatePath() = Documents/sstates/
+iOS API: NSSearchPathForDirectoriesInDomains, NSTemporaryDirectory()
+Effort: LOW
+
+--- Issue #8: WebP ambiguity in Image.cpp ---
+File: pcsx2/common/Image.cpp
+Location: Lines 27-28
+What to do:
+  - Remove 'static' keyword from lines 27-28
+  - Keep definitions inside anonymous namespace (lines 688, 710) as-is
+  - This ensures declarations and definitions have the same linkage
+iOS API alternative: N/A (build fix)
+Effort: LOW
+
+--- Issue #9: 3rdparty Android/JNI code ---
+File: pcsx2/CMakeLists.txt, cmake files
+Location: Various 3rdparty CMakeLists.txt
+What to do:
+  - Ensure Android-specific 3rdparty libs are excluded when PCSX2_TARGET_IOS=ON
+  - cubeb should use CoreAudio on iOS, not JNI
+  - ffmpeg JNI should not be compiled for iOS
+iOS API alternative: CoreAudio (not Oboe), no JNI needed
+Effort: LOW
+
+--- Issue #10: MoltenVK reference ---
+File: pcsx2/CMakeLists.txt
+Location: Lines 1413-1421
+What to do:
+  - Wrap MoltenVK with if(NOT IOS) or if(APPLE AND NOT IOS)
+  - MoltenVK is for macOS only, iOS uses Metal directly
+iOS API alternative: Metal (already linked)
+Effort: LOW
+
+================================================================================
+END OF REPORT
+================================================================================

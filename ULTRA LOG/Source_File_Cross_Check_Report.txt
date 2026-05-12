@@ -1,0 +1,63 @@
+================================================================================
+STEP 3 RESULTS — SOURCE FILE CROSS-CHECK
+================================================================================
+
+### A) Files that need path corrections (EXIST, wrong path):
+
+| Current (Wrong) | Correct Path | Status |
+|-----------------|---------------|--------|
+| GIF.cpp | Gif.cpp | EXISTS |
+| SIO/Mcd/MemoryCardFile.cpp | SIO/Memcard/MemoryCardFile.cpp | EXISTS |
+| SIO/Mcd/MemoryCardFolder.cpp | SIO/Memcard/MemoryCardFolder.cpp | EXISTS |
+| GS/Renderers/SW/GSVertexTraceFMM.cpp | GS/Renderers/Common/GSVertexTraceFMM.cpp | EXISTS |
+| SPU2/Spu2.cpp | SPU2/spu2.cpp | EXISTS |
+
+### B) Files that DO NOT EXIST (remove from list):
+
+| File | Reason |
+|------|--------|
+| IopSio2.cpp | Does not exist (only Sio2.cpp exists) |
+| IPU/mpeg2_vlc.cpp | Does not exist (only mpeg2_vlc.h header) |
+| CDVD/CDVDaccess.cpp | Does not exist in CDVD |
+| CDVD/IsoFS/IsoFS.cpp | IsoFS directory does not exist |
+| CDVD/IsoFS/IsoFSCDVD.cpp | IsoFS directory does not exist |
+| SIO/SioTypes.cpp | Does not exist (only SioTypes.h header) |
+| SPU2/SndOut.cpp | Does not exist |
+
+### C) Files from upstream NOT in our current list (candidates to add):
+
+From the upstream pcsx2Sources, we are missing:
+- Gif.cpp
+- Gif_Logger.cpp
+- Gif_Unit.cpp
+- Interpreter.cpp
+- IopGte.cpp
+- PINE.cpp
+- MMI.cpp
+- MTGS.cpp
+- MTVU.cpp
+- Sif0.cpp
+- Sif1.cpp
+- sif2.cpp
+- SPR.cpp
+- StateWrapper.cpp
+- Vif0_Dma.cpp
+- Vif1_Dma.cpp
+- Vif1_MFIFO.cpp
+- Vif.cpp
+- Vif_Codes.cpp
+- Vif_Transfer.cpp
+- Vif_Unpack.cpp
+- VU0micro.cpp
+- VU0microInterp.cpp
+- VU1micro.cpp
+- VU1microInterp.cpp
+- VUflags.cpp
+- VUmicroMem.cpp
+
+And many more from other source sets (CDVD, SPU2, PAD, USB, DEV9, etc.)
+
+================================================================================
+Generated: 2026-05-09
+Source: pcsx2/pcsx2/CMakeLists.txt (upstream PCSX2)
+================================================================================

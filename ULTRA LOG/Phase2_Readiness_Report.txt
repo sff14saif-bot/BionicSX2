@@ -1,0 +1,123 @@
+================================================================================
+  PHASE 2 — PCSX2 CORE SOURCES READINESS REPORT
+  Generated: 2026-05-09
+================================================================================
+
+=== CORE SOURCES ASSESSMENT ===
+
+Safe to include (no platform guards needed):
+
+  R3000A.cpp, R3000AInterpreter.cpp, R3000AOpcodeTables.cpp
+    → IOP interpreter — platform-agnostic
+
+  R5900.cpp, R5900OpcodeImpl.cpp, R5900OpcodeTables.cpp
+    → EE interpreter — platform-agnostic
+
+  COP0.cpp, COP2.cpp
+    → Coprocessor emulation — platform-agnostic
+
+  Memory.cpp, vtlb.cpp
+    → Memory management — portable
+
+  VU0.cpp, VU1.cpp, VUmicro.cpp, VUops.cpp
+    → VU emulation — portable (NEON works on iOS)
+
+  Counters.cpp, Dmac.cpp, GIF.cpp, Sif.cpp
+    → Hardware I/O — portable
+
+  CDVD/*
+    → Disc drive emulation — portable
+
+  SPU2/*
+    → Audio emulation — portable
+
+  SIO/*
+    → Serial I/O — portable
+
+  USB/*, DEV9/*
+    → Peripherals — portable
+
+  GS/GS.cpp (core), GSLocalMemory.cpp, GSState.cpp
+    → GS core — portable
+
+  GS/Renderers/Common/*, GS/Renderers/SW/*, GS/Renderers/HW/*
+    → Software/HW renderers — portable
+
+  GS/Renderers/Metal/*
+    → Metal renderer — YES, our target backend
+
+  arm64/*
+    → ARM64 dynarec stubs — should be included
+
+---
+
+Needs #ifdef guard (x86/Vulkan/Win32 references inside):
+
+  VMManager.cpp:56
+    → #if !defined(PCSX2_TARGET_IOS) — x86emitter.h include
+
+  VMManager.cpp:61
+    → #if !defined(PCSX2_TARGET_IOS) && !defined(DISABLE_DISCORD_RPC)
+    → discord_rpc.h include
+
+  VMManager.cpp:78
+    → #if defined(__APPLE__) && !defined(PCSX2_TARGET_IOS)
+    → DarwinMisc.h include
+
+  GS.cpp:33-35
+    → #if !defined(DISABLE_VULKAN) — GSDeviceVK.h include
+
+---
+
+Must exclude entirely (x86 recompiler / Vulkan backend):
+
+  pcsx2/pcsx2/x86/*
+    → x86 JIT recompiler — ARM64 incompatible
+
+  pcsx2/pcsx2/GS/Renderers/Vulkan/*
+    → DISABLE_VULKAN=1 set in CMake
+
+  pcsx2/pcsx2/GS/Renderers/OpenGL/*
+    → No OpenGL on iOS
+
+  pcsx2/pcsx2/GS/Renderers/DX11/*
+    → Windows only
+
+  pcsx2/pcsx2/GS/Renderers/DX12/*
+    → Windows only
+
+================================================================================
+
+=== GS BACKEND STATUS ===
+
+Metal backend present: YES — GS/Renderers/Metal/
+Vulkan backend present: YES — must exclude via DISABLE_VULKAN
+Software renderer present: YES — GS/Renderers/SW/
+
+================================================================================
+
+=== VMMANAGER.CPP GUARDS NEEDED ===
+
+Line 56  | #include "common/emitter/x86emitter.h"           | #if !defined(PCSX2_TARGET_IOS)
+Line 61  | #include "discord_rpc.h"                        | #if !defined(PCSX2_TARGET_IOS) && !defined(DISABLE_DISCORD_RPC)
+Line 78  | #include "common/Darwin/DarwinMisc.h"            | #if defined(__APPLE__) && !defined(PCSX2_TARGET_IOS)
+
+================================================================================
+
+=== BLOCKING ISSUES FOR LAYER 2 ===
+
+1. VMManager.cpp — needs 3 #ifdef guards before adding to build
+2. GS.cpp — needs Vulkan guard before adding to build
+3. CMakeLists.txt — must add pcsx2_core target with correct source list
+4. Link dependencies — will need Frameworks:
+   - imgui, libchdr, libzip, cubeb, rcheevos, discord-rpc, simpleini,
+   - freesurround, SDL3, ZLIB, LZ4, SoundTouch, LZMA, Zstd
+   - Many may need to be excluded or stubbed for iOS
+
+================================================================================
+
+STATUS: READY TO PROCEED TO STEP 1
+
+Report confirmed — proceeding to add pcsx2_core to CMakeLists.txt.
+
+================================================================================
